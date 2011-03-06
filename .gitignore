@@ -1,0 +1,12 @@
+# .gitignore
+
+# editor temprary files.
+*.swp
+*~
+
+# 
+*.beam
+*.P
+*.S
+erl_crash.dump
+_build

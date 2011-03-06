@@ -1,0 +1,10 @@
+{
+  [
+    'record_info.erl',
+    'record_info_transform.erl'
+  ],
+  [
+    verbose,
+    {outdir, "../_build/record_info/ebin"}
+  ]
+}.

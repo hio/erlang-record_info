@@ -1,0 +1,24 @@
+
+erlang-record_info
+==================
+
+see t/test.erl as a sample code.
+
+
+-include("record_info.hrl") automaticaly create and export record_info/1
+function.
+
+record_info:record_to_proplist/2 and proplist_to_record/3 use
+this function.
+
+ record_to_proplist(Record, Module) -> PropList.
+ proplist_to_record(PropList, Module, RecordName) -> Record.
+
+Module argument of proplist_to_record/3 is a module which
+use record of RecordName.
+
+
+
+.. ---------------------------------------------------------------------------
+.. End Of File.
+.. ---------------------------------------------------------------------------

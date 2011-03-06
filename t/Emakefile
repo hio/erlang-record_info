@@ -1,0 +1,11 @@
+{
+  [
+    'test.erl'
+  ],
+  [
+    verbose,
+    debug_info,
+    {i,      "../_build/record_info/include"},
+    {outdir, "../_build/t/ebin"}
+  ]
+}.
