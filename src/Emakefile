@@ -5,6 +5,7 @@
   ],
   [
     verbose,
+    warn_missing_spec,
     {outdir, "../_build/record_info/ebin"}
   ]
 }.

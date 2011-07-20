@@ -7,8 +7,6 @@
 -module(record_info_transform).
 -export([parse_transform/2]).
 
--type erl_form_term() :: tuple().
-
 -type erl_form_atom() ::
        {
          Type   :: atom,
@@ -26,7 +24,7 @@
           Type      :: record_field,
           Lineno    :: pos_integer(),
           FieldName :: erl_form_atom(),
-          IniValue  :: erl_form_term()
+          IniValue  :: erl_parse:abstract_form()
         }.
 -type erl_form_record_field() ::
         erl_form_record_field_1() |
@@ -46,9 +44,9 @@
 }).
 
 -spec parse_transform(
-    Form :: [erl_form_term()],
+    Form :: [erl_parse:abstract_form()],
     Opts :: [compile:option()]
-  ) -> [erl_form_term()].
+  ) -> [erl_parse:abstract_form()].
 parse_transform(F, O) ->
   ?LOG_DEBUG("F:~n~p~nO:~n~p~n", [F, O]),
   Result  = [],
@@ -74,6 +72,7 @@ parse_1([], Result, Records, _O) ->
       merge(Result_2, Records)
   end.
 
+% read record information.
 % record 情報を保存.
 read_record(Name, Fields, LineNo, Records) ->
   Record = #record_spec {
@@ -83,23 +82,24 @@ read_record(Name, Fields, LineNo, Records) ->
   },
   [{Name, Record} | Records].
 
-
+% generate information generating code from record information.
 % record 情報から情報取得用コードを生成する.
 merge(Result, Records) ->
   InitLineNo = (element(2, lists:last(Records)))#record_spec.lineno,
 
   {InitFun, InitExport} = make_init_fun(Records, InitLineNo),
   ?LOG_DEBUG("X:~n~p~n", [InitFun]),
+  Spec = make_spec(Records, InitLineNo),
 
   {Preamble, Follows} = split_preamble(Result),
-  Result_2 = Preamble ++ [InitExport, InitFun] ++ Follows,
+  Result_2 = Preamble ++ [InitExport, Spec, InitFun] ++ Follows,
   ?LOG_DEBUG("XX:~n~p~n", [Result_2]),
   Result_2.
 
 
 -spec field_name(
     RecordField :: erl_form_record_field()
-  ) -> {erl_form_atom(), erl_form_term()}.
+  ) -> {erl_form_atom(), erl_parse:abstract_form()}.
 field_name({record_field, _Line, Name}) ->
   Name;
 field_name({record_field, _Line, Name, _Value}) ->
@@ -107,7 +107,7 @@ field_name({record_field, _Line, Name, _Value}) ->
 
 -spec field_name_value(
     RecordField :: erl_form_record_field()
-  ) -> {erl_form_atom(), erl_form_term()}.
+  ) -> {erl_form_atom(), erl_parse:abstract_form()}.
 field_name_value({record_field, _Line1, Name1}) ->
   {atom, Line2, _Name2} = Name1,
   {Name1, {atom, Line2, undefined}};
@@ -117,6 +117,7 @@ field_name_value({record_field, _Line1, Name, Value}) ->
 raw_atom({atom, _Lineno, Atom}) ->
   Atom.
 
+% generate record_init function.
 % record_init 関数の作成.
 make_init_fun(Records, InitLineNo) ->
   Clauses_0 = [],
@@ -167,9 +168,88 @@ make_init_fun(Records, InitLineNo) ->
   Arity   = 1,
   InitFun = {function, InitLineNo, FunName, Arity, Clauses},
   InitExport = {attribute, InitLineNo, export, [{FunName,Arity}]},
+
   {InitFun, InitExport}.
 
+make_spec(Records, InitLineNo) ->
+  RecordListType = {type,InitLineNo,list,[{type,11,union,[ {atom,InitLineNo,RecName} || {RecName,_MySpec} <- Records]}]},
+  % (list) -> [record_name()].
+  SpecForList = {
+    type, InitLineNo, 'fun',
+    [{type,InitLineNo,product,[{atom,InitLineNo,list}]},RecordListType]
+  },
 
+  % ({keys,RecName}) -> [atom()].
+  SpecsForKeys = [
+     begin
+       FldNameList = [ element(3, X) || X<-MySpec#record_spec.fields],
+       FldList = [ {atom,InitLineNo,FldName} || {atom,_,FldName} <- FldNameList ],
+       {type,InitLineNo,'fun',
+        [{type,InitLineNo,product,[{type,InitLineNo,tuple,[{atom,InitLineNo,keys},{atom,InitLineNo,RecName}]}]},
+         {type,InitLineNo,list,[{type,InitLineNo,union,FldList}]}]
+       }
+     end
+     ||
+     {RecName, MySpec} <- Records
+  ],
+
+  % ({value,RecName,Key}) -> any().
+  SpecsForValue = [
+     {type,InitLineNo,'fun',
+      [{type,InitLineNo,product,
+        [{type,InitLineNo,tuple,
+          [{atom,InitLineNo,value},{type,InitLineNo,atom,[]},{type,InitLineNo,atom,[]}]}]},
+       {type,InitLineNo,any,[]}]}
+  ],
+  SpecList = [SpecForList] ++ SpecsForKeys ++ SpecsForValue,
+  InitSpec = {attribute,InitLineNo,spec, {{record_info,1}, SpecList}},
+
+  InitSpec.
+
+%make_spec() ->
+%  ok.
+% {attribute,11,spec,
+%  {{record_info,1},
+%   [{type,11,'fun',
+%     [{type,11,product,[{atom,11,list}]},{type,11,list,[{type,11,atom,[]}]}]},
+%    {type,12,'fun',
+%     [{type,12,product,[{type,12,tuple,[{atom,12,keys},{type,12,atom,[]}]}]},
+%      {type,12,list,[{type,12,atom,[]}]}]},
+%    {type,13,'fun',
+%     [{type,13,product,
+%       [{type,13,tuple,
+%         [{atom,13,value},{type,13,atom,[]},{type,13,atom,[]}]}]},
+%      {type,13,any,[]}]}]}},
+%
+% {attribute,11,spec,
+%  {{record_info,1},
+%   [{type,11,'fun',
+%     [{type,11,product,[{atom,11,list}]},
+%      {type,11,list,[{type,11,union,[{atom,11,rec2},{atom,11,rec}]}]}]},
+%    {type,12,'fun',
+%     [{type,12,product,[{type,12,tuple,[{atom,12,keys},{atom,12,rec}]}]},
+%      {type,12,list,[{type,12,union,[{atom,12,a},{atom,12,b}]}]}]},
+%    {type,13,'fun',
+%     [{type,13,product,[{type,13,tuple,[{atom,13,keys},{atom,13,rec2}]}]},
+%      {type,13,list,[{type,13,union,[{atom,13,aaa},{atom,13,bbb}]}]}]},
+%    {type,14,'fun',
+%     [{type,14,product,
+%       [{type,14,tuple,[{atom,14,value},{atom,14,rec},{atom,14,a}]}]},
+%      {integer,14,1}]},
+%    {type,15,'fun',
+%     [{type,15,product,
+%       [{type,15,tuple,[{atom,15,value},{atom,15,rec},{atom,15,b}]}]},
+%      {integer,15,2}]},
+%    {type,16,'fun',
+%     [{type,16,product,
+%       [{type,16,tuple,[{atom,16,value},{atom,16,rec2},{atom,16,aaa}]}]},
+%      {atom,16,undefined}]},
+%    {type,17,'fun',
+%     [{type,17,product,
+%       [{type,17,tuple,[{atom,17,value},{atom,17,rec2},{atom,17,bbb}]}]},
+%      {integer,17,1234}]}]}},
+
+% split into preamble part and functions part.
 % preamble 部とfunction以降とで分割.
 split_preamble(List) ->
   split_preamble_2(List, []).

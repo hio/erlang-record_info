@@ -8,6 +8,15 @@
 -import(record_info, [record_to_proplist/2]).
 -import(record_info, [proplist_to_record/3]).
 
+%-spec record_info
+%  (list) -> [rec2|rec];
+%  ({keys,rec})  -> [a|b];
+%  ({keys,rec2}) -> [aaa|bbb];
+%  ({value,rec,a}) -> 1;
+%  ({value,rec,b}) -> 2;
+%  ({value,rec2,aaa}) -> undefined;
+%  ({value,rec2,bbb}) -> 1234.
+
 -record(rec, {
   a = 1 :: integer(),
   b = 2 :: integer()
@@ -23,18 +32,18 @@ test() ->
   io:format("R2 = ~p~n", [R2]),
   %==> R2 = [{a,3},{b,4}]
 
-  R3 = proplist_to_record(R2, ?MODULE, rec),
+  R3 = proplist_to_record(R2, rec, ?MODULE),
   io:format("R3 = ~p~n", [R3]),
   %==> R3 = {rec,3,4}
 
-  R4 = proplist_to_record([], ?MODULE, rec),
+  R4 = proplist_to_record([], rec, ?MODULE),
   io:format("R4 = ~p~n", [R4]),
   %==> R4 = {rec,1,2}
 
   R5 = fun()-> try
     % non key-value element.
     BadElem = list_to_tuple([a,b,c]),
-    proplist_to_record([BadElem], ?MODULE, rec)
+    proplist_to_record([BadElem], rec, ?MODULE)
   catch
     C:R -> {C,R}
   end end(),
@@ -50,12 +59,12 @@ test() ->
   io:format("R7 = ~p~n", [R7]),
   %==> R7 = [{aaa,4},{bbb,undefined}]
 
-  R8 = proplist_to_record([], ?MODULE, rec2),
+  R8 = proplist_to_record([], rec2, ?MODULE),
   io:format("R8 = ~p~n", [R8]),
   %==> R8 = {rec2,undefined,undefined}
 
   R9 = (fun() -> try
-    proplist_to_record([], ?MODULE, rec_not_defined)
+    proplist_to_record([], rec_not_defined, ?MODULE)
   catch
     C:R -> {C,R}
   end end)(),
