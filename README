@@ -4,20 +4,32 @@ erlang-record_info
 
 see t/test.erl as a sample code.
 
+DESCRIPTION
+-----------
 
--include("record_info.hrl") automaticaly create and export record_info/1
+-include("record_info.hrl") automaticaly creates and exports record_info/1
 function.
 
 record_info:record_to_proplist/2 and proplist_to_record/3 use
 this function.
 
  record_to_proplist(Record, Module) -> PropList.
- proplist_to_record(PropList, Module, RecordName) -> Record.
+ proplist_to_record(PropList, RecordName, Module) -> Record.
 
-Module argument of proplist_to_record/3 is a module which
-use record of RecordName.
+Module argument of proplist_to_record/3 is a module name which
+is using record information of RecordName.
 
 
+BUILD AND INSTALL
+-----------------
+
+small Makefile is contained, just type make.
+
+ $ make
+
+beam files are generated into _build/record_info/ebin.
+install script is not supplied.
+please do it by hand if you want...
 
 .. ---------------------------------------------------------------------------
 .. End Of File.
