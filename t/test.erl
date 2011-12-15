@@ -24,21 +24,19 @@
 
 -spec test() -> ok.
 test() -> 
+  plan(9),
+
   R1 = #rec{a = 3, b = 4},
-  io:format("R1 = ~p~n", [R1]),
-  %==> R1 = {rec,3,4}
+  disp(1, R1, {rec, 3, 4}),
 
   R2 = record_to_proplist(R1, ?MODULE),
-  io:format("R2 = ~p~n", [R2]),
-  %==> R2 = [{a,3},{b,4}]
+  disp(2, R2, [{a,3}, {b,4}]),
 
   R3 = proplist_to_record(R2, rec, ?MODULE),
-  io:format("R3 = ~p~n", [R3]),
-  %==> R3 = {rec,3,4}
+  disp(3, R3, {rec, 3, 4}),
 
   R4 = proplist_to_record([], rec, ?MODULE),
-  io:format("R4 = ~p~n", [R4]),
-  %==> R4 = {rec,1,2}
+  disp(4, R4, {rec,1,2}),
 
   R5 = fun()-> try
     % non key-value element.
@@ -47,31 +45,47 @@ test() ->
   catch
     C:R -> {C,R}
   end end(),
-  io:format("R5 = ~p~n", [R5]),
-  %==> R5 = {error,{badarg,{a,b,c}}}
+  disp(5, R5, {error,{badarg,{a,b,c}}}),
 
 
   R6 = #rec2{aaa = 4},
-  io:format("R6 = ~p~n", [R6]),
-  %==> R6 = {rec2,4,undefined}
+  disp(6, R6, {rec2,4,1234}),
 
   R7 = record_to_proplist(R6, ?MODULE),
-  io:format("R7 = ~p~n", [R7]),
-  %==> R7 = [{aaa,4},{bbb,undefined}]
+  disp(7, R7, [{aaa,4},{bbb,1234}]),
 
   R8 = proplist_to_record([], rec2, ?MODULE),
-  io:format("R8 = ~p~n", [R8]),
-  %==> R8 = {rec2,undefined,undefined}
+  disp(8, R8, {rec2,undefined,1234}),
 
   R9 = (fun() -> try
     proplist_to_record([], rec_not_defined, ?MODULE)
   catch
     C:R -> {C,R}
   end end)(),
-  io:format("R9 = ~p~n", [R9]),
-  %==> R9 = {error,function_clause}
+  disp(9, R9, {error,function_clause}),
 
   ok.
+
+plan(N) ->
+  io:format("1..~p~n", [N]),
+  ok.
+
+disp(N, Got, Expected) ->
+  Eq = Got == Expected,
+  Result = case Eq of
+    true  -> "ok";
+    false -> "not ok"
+  end,
+  ExpectedStr = io_lib:format("~p", [Expected]),
+  io:format("~s ~p # expects ~s~n", [Result, N, ExpectedStr]),
+  case Eq of
+    true ->
+      ok;
+    false ->
+      GotStr = io_lib:format("~p", [Got]),
+      io:format("# got ~s~n", [GotStr])
+  end,
+  Eq.
 
 % ----------------------------------------------------------------------------
 % End of File.
