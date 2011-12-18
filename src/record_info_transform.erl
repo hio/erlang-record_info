@@ -206,49 +206,6 @@ make_spec(Records, InitLineNo) ->
 
   InitSpec.
 
-%make_spec() ->
-%  ok.
-% {attribute,11,spec,
-%  {{record_info,1},
-%   [{type,11,'fun',
-%     [{type,11,product,[{atom,11,list}]},{type,11,list,[{type,11,atom,[]}]}]},
-%    {type,12,'fun',
-%     [{type,12,product,[{type,12,tuple,[{atom,12,keys},{type,12,atom,[]}]}]},
-%      {type,12,list,[{type,12,atom,[]}]}]},
-%    {type,13,'fun',
-%     [{type,13,product,
-%       [{type,13,tuple,
-%         [{atom,13,value},{type,13,atom,[]},{type,13,atom,[]}]}]},
-%      {type,13,any,[]}]}]}},
-%
-% {attribute,11,spec,
-%  {{record_info,1},
-%   [{type,11,'fun',
-%     [{type,11,product,[{atom,11,list}]},
-%      {type,11,list,[{type,11,union,[{atom,11,rec2},{atom,11,rec}]}]}]},
-%    {type,12,'fun',
-%     [{type,12,product,[{type,12,tuple,[{atom,12,keys},{atom,12,rec}]}]},
-%      {type,12,list,[{type,12,union,[{atom,12,a},{atom,12,b}]}]}]},
-%    {type,13,'fun',
-%     [{type,13,product,[{type,13,tuple,[{atom,13,keys},{atom,13,rec2}]}]},
-%      {type,13,list,[{type,13,union,[{atom,13,aaa},{atom,13,bbb}]}]}]},
-%    {type,14,'fun',
-%     [{type,14,product,
-%       [{type,14,tuple,[{atom,14,value},{atom,14,rec},{atom,14,a}]}]},
-%      {integer,14,1}]},
-%    {type,15,'fun',
-%     [{type,15,product,
-%       [{type,15,tuple,[{atom,15,value},{atom,15,rec},{atom,15,b}]}]},
-%      {integer,15,2}]},
-%    {type,16,'fun',
-%     [{type,16,product,
-%       [{type,16,tuple,[{atom,16,value},{atom,16,rec2},{atom,16,aaa}]}]},
-%      {atom,16,undefined}]},
-%    {type,17,'fun',
-%     [{type,17,product,
-%       [{type,17,tuple,[{atom,17,value},{atom,17,rec2},{atom,17,bbb}]}]},
-%      {integer,17,1234}]}]}},
-
 % split into preamble part and functions part.
 % preamble 部とfunction以降とで分割.
 split_preamble(List) ->
