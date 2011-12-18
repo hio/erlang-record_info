@@ -6,6 +6,7 @@
 % ----------------------------------------------------------------------------
 -module(record_info_transform).
 -export([parse_transform/2]).
+-export([format_error/1]).
 
 -type lineno() :: erl_scan:line().
 
@@ -45,6 +46,37 @@
   lineno :: lineno()
 }).
 
+-record(export_spec, {
+  name   :: atom(),
+  file   :: file:name(),
+  lineno :: lineno()
+}).
+
+-record(error_descriptor, {
+  msg :: string()
+}).
+-type error_descriptor() :: #error_descriptor{}.
+-type err_info() :: {lineno(), module(), error_descriptor()}.
+
+-record(parsed_info, {
+  file        = "" :: file:name(),
+  record_list = [] :: [{atom(),#record_spec{}}],
+  export_list = [] :: [#export_spec{}],
+  errors      = [] :: [err_info()],
+  warnings    = []
+}).
+
+% ----------------------------------------------------------------------------
+% format_error(ErrDesc).
+% called from compiler framework.
+%
+-spec format_error(error_descriptor()) -> string().
+format_error(ErrDesc) ->
+  ErrDesc#error_descriptor.msg.
+
+% ----------------------------------------------------------------------------
+% parse_transform.
+%
 -spec parse_transform(
     Form :: [erl_parse:abstract_form()],
     Opts :: [compile:option()]
@@ -52,52 +84,179 @@
 parse_transform(F, O) ->
   ?LOG_DEBUG("F:~n~p~nO:~n~p~n", [F, O]),
   Result  = [],
-  Records = [],
-  F2 = parse_1(F, Result, Records, O),
+  ParsedInfo = #parsed_info {
+    file        = "",
+    record_list = [],
+    export_list = []
+  },
+  F2 = parse_1(F, Result, ParsedInfo, O),
   F2.
 
-parse_1([{attribute, LineNo, record, {Name, Fields}}=Head | Rest], Result, Records, O) ->
-  Records_2 = read_record(Name, Fields, LineNo, Records),
-  parse_1(Rest, [Head | Result], Records_2, O);
+parse_1([{attribute, LineNo, record, {Name, Fields}}=Head | Rest], Result, ParsedInfo, O) ->
+  ParsedInfo_2 = read_record(Name, Fields, LineNo, ParsedInfo),
+  parse_1(Rest, [Head | Result], ParsedInfo_2, O);
 
-parse_1([Head | Rest], Result, Records, O) ->
-  parse_1(Rest, [Head | Result], Records, O);
+parse_1([{attribute, LineNo, export_record_info, Name} | Rest], Result, ParsedInfo, O) when is_atom(Name) ->
+  {Result_2, ParsedInfo_2} = parse_export_record_info([Name], LineNo, Result, ParsedInfo),
+  parse_1(Rest, Result_2, ParsedInfo_2, O);
 
-parse_1([], Result, Records, _O) ->
-  ?LOG_DEBUG("R:~n~p~n", [Records]),
+parse_1([{attribute, LineNo, export_record_info, NameList} | Rest], Result, ParsedInfo, O) when is_list(NameList) ->
+  {Result_2, ParsedInfo_2} = parse_export_record_info(NameList, LineNo, Result, ParsedInfo),
+  parse_1(Rest, Result_2, ParsedInfo_2, O);
+
+parse_1([{attribute, _LineNo, file, {FileName, _LineNo2}}=Head | Rest], Result, ParsedInfo, O) ->
+  ParsedInfo_2 = ParsedInfo#parsed_info {
+    file = FileName
+  },
+  Result_2 = [Head | Result],
+  parse_1(Rest, Result_2, ParsedInfo_2, O);
+
+parse_1([Head | Rest], Result, ParsedInfo, O) ->
+  Result_2 = [Head | Result],
+  parse_1(Rest, Result_2, ParsedInfo, O);
+
+parse_1([], Result, ParsedInfo, _O) ->
+  ?LOG_DEBUG("R:~n~p~n~p~n", [ParsedInfo, Result]),
 
   Result_2 = lists:reverse(Result),
-  case Records of
-    [] ->
-      Result_2;
+  case ParsedInfo of
+    #parsed_info { export_list = [] } ->
+      % nop. no records exported.
+      make_compiler_result(Result_2, ParsedInfo);
     _ ->
-      merge(Result_2, Records)
+      {Result_3, ParsedInfo_2} = merge(Result_2, ParsedInfo),
+      make_compiler_result(Result_3, ParsedInfo_2)
   end.
 
+make_compiler_result(Result, ParsedInfo) ->
+  if
+    ParsedInfo#parsed_info.errors /= [] ->
+      ErrorList = ParsedInfo#parsed_info.errors,
+      WarnList  = ParsedInfo#parsed_info.warnings,
+      {error, ErrorList, WarnList};
+    ParsedInfo#parsed_info.warnings /= [] ->
+      WarnList  = ParsedInfo#parsed_info.warnings,
+      {warning, Result, WarnList};
+    true -> % otherwise.
+      Result
+  end.
+
+% ----------------------------------------------------------------------------
 % read record information.
 % record 情報を保存.
-read_record(Name, Fields, LineNo, Records) ->
+read_record(Name, Fields, LineNo, ParsedInfo) ->
   Record = #record_spec {
     name   = {atom, LineNo, Name},
     fields = Fields,
     lineno = LineNo
   },
-  [{Name, Record} | Records].
+  RecordList   = ParsedInfo#parsed_info.record_list,
+  RecordList_2 = [{Name, Record} | RecordList ],
+  ParsdInfo_2  = ParsedInfo#parsed_info {
+    record_list = RecordList_2
+  },
+  ParsdInfo_2.
 
+% ----------------------------------------------------------------------------
+% parse_export_record_info.
+%
+parse_export_record_info(NameList, LineNo, Result, ParsedInfo) ->
+  case read_export_record_info(NameList, LineNo, ParsedInfo) of
+    {ok, ParsedInfo_2} ->
+      {Result, ParsedInfo_2};
+    {ng, ParsedInfo_2} ->
+      File = ParsedInfo_2#parsed_info.file,
+      Msg = "bad export_record_info attribute",
+      ParsedInfo_3 = report_error(File, LineNo, Msg, ParsedInfo_2),
+      Error    = {error, {LineNo, ?MODULE, Msg}},
+      Result_2 = [Error | Result],
+      {Result_2, ParsedInfo_3}
+  end.
+
+read_export_record_info(NameList, LineNo, ParsedInfo) ->
+  ExportList = ParsedInfo#parsed_info.export_list,
+  {OkNg, ExportList_2} = lists:foldl(
+    fun
+      (Name, {OkNg, AccIn}) when is_atom(Name) ->
+        ExportSpec = #export_spec {
+          name   = Name,
+          file   = ParsedInfo#parsed_info.file,
+          lineno = LineNo
+        },
+        {OkNg, [ExportSpec | AccIn]};
+      (_, {_OkNg, AccIn}) ->
+        {ng, AccIn}
+    end,
+    {ok, ExportList},
+    NameList
+  ),
+  ParsdInfo_2 = ParsedInfo#parsed_info {
+    export_list = ExportList_2
+  },
+  {OkNg, ParsdInfo_2}.
+
+
+% ----------------------------------------------------------------------------
+% merge.
+%
 % generate information generating code from record information.
 % record 情報から情報取得用コードを生成する.
-merge(Result, Records) ->
-  InitLineNo = (element(2, lists:last(Records)))#record_spec.lineno,
+merge(Result, ParsedInfo) ->
+  {RecordList, NgList} = lists:foldl(
+    fun(Elem, {OkListIn, NgListIn}) ->
+      Name = Elem#export_spec.name,
+      case proplists:lookup(Name, ParsedInfo#parsed_info.record_list) of
+        none ->
+          {OkListIn, [Elem | NgListIn]};
+        Tuple ->
+          {[Tuple | OkListIn], NgListIn}
+      end
+    end,
+    {[], []},
+    ParsedInfo#parsed_info.export_list
+  ),
 
-  {InitFun, InitExport} = make_init_fun(Records, InitLineNo),
+  case NgList of
+    [] ->
+      merge_2(RecordList, Result, ParsedInfo);
+    _ ->
+      parse_error_invalid_export(NgList, Result, ParsedInfo)
+  end.
+
+merge_2(RecordList, Result, ParsedInfo) ->
+  InitLineNo = (element(2, lists:last(RecordList)))#record_spec.lineno,
+
+  {InitFun, InitExport} = make_init_fun(RecordList, InitLineNo),
   ?LOG_DEBUG("X:~n~p~n", [InitFun]),
-  Spec = make_spec(Records, InitLineNo),
+  Spec = make_spec(RecordList, InitLineNo),
 
   {Preamble, Follows} = split_preamble(Result),
   Result_2 = Preamble ++ [InitExport, Spec, InitFun] ++ Follows,
   ?LOG_DEBUG("XX:~n~p~n", [Result_2]),
-  Result_2.
+  {Result_2, ParsedInfo}.
 
+parse_error_invalid_export([], Result, ParsedInfo) ->
+  {Result, ParsedInfo};
+parse_error_invalid_export([ExportSpec | Rest], Result, ParsedInfo) ->
+  #export_spec {
+    name   = Name,
+    file   = File,
+    lineno = LineNo
+  } = ExportSpec,
+  Msg = "exported record "++atom_to_list(Name)++" not found",
+  ParsedInfo_2 = report_error(File, LineNo, Msg, ParsedInfo),
+  Error = {error, {LineNo, ?MODULE, Msg}},
+  Result_2 = [Error | Result],
+  parse_error_invalid_export(Rest, Result_2, ParsedInfo_2).
+
+report_error(File, LineNo, Msg, ParsedInfo) ->
+  ErrDesc      = #error_descriptor { msg = Msg },
+  Error        = {File, [{LineNo, ?MODULE, ErrDesc}]},
+  ErrorList    = ParsedInfo#parsed_info.errors,
+  ParsedInfo_2 = ParsedInfo#parsed_info {
+    errors = [Error | ErrorList]
+  },
+  ParsedInfo_2.
 
 -spec field_name(
     RecordField :: erl_form_record_field()
@@ -127,6 +286,7 @@ make_init_fun(Records, InitLineNo) ->
     Fields = Spec#record_spec.fields,
     LineNo = Spec#record_spec.lineno,
     RecordName = Spec#record_spec.name,
+
     % record_info({value, RecordName, FieldName}) の生成.
     List_1 = lists:foldl(fun(Field, AccIn2) ->
       {FieldName, IniValue} = field_name_value(Field),
@@ -136,6 +296,7 @@ make_init_fun(Records, InitLineNo) ->
       Clause2 = {clause, LineNo, [Clause], [], [IniValue]},
       [{SortKey, Clause2} | AccIn2]
     end, AccIn1, Fields),
+
     % record_info({keys, RecordName}) の生成.
     KeysPart = (fun() ->
       KeysValue = lists:foldl(fun(Field, AccIn2) ->
@@ -148,6 +309,7 @@ make_init_fun(Records, InitLineNo) ->
       Clause2 = {clause, LineNo, [Clause], [], [KeysValue]},
       {SortKey, Clause2}
     end)(),
+
     List_2 = [KeysPart | List_1],
     List_2
   end, Clauses_0, Records),
@@ -164,8 +326,9 @@ make_init_fun(Records, InitLineNo) ->
     Clause2 = {clause, LineNo, [Clause], [], [RecordNameList]},
     [{SortKey, Clause2} | Clauses_1]
   end)(),
-  Clauses = [ Orig || {_SortKey, Orig} <- lists:sort(Clauses_2) ],
 
+  % fun() の生成.
+  Clauses = [ Orig || {_SortKey, Orig} <- lists:sort(Clauses_2) ],
   FunName = record_info,
   Arity   = 1,
   InitFun = {function, InitLineNo, FunName, Arity, Clauses},

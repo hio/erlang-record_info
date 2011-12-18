@@ -24,7 +24,7 @@
 
 -spec version() -> {non_neg_integer(),non_neg_integer(),non_neg_integer(),non_neg_integer()}.
 version() ->
-  {0,1,0,0}.
+  {0,2,0,0}.
 
 -spec version_string() -> string().
 version_string() ->

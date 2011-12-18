@@ -5,6 +5,7 @@
 -export([main/0]).
 -include_lib("record_info/include/record_info.hrl").
 -include_lib("kernel/include/file.hrl").
+-export_record_info([file_info]).
 
 -spec main() -> ok.
 main() ->

@@ -1,0 +1,10 @@
+
+0.2 2011-12-18
+
+(incompatible)
+- selective record export via -export_record_info([name]) directive
+  (all records are exported implicitly in v0.1).
+
+0.1 2011-03-07
+
+- Initial release.

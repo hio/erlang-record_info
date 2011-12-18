@@ -8,19 +8,16 @@
 -include("record_info.hrl").
 -import(record_info, [record_to_proplist/2]).
 -import(record_info, [proplist_to_record/3]).
-
-%-spec record_info
-%  (list) -> [rec2|rec];
-%  ({keys,rec})  -> [a|b];
-%  ({keys,rec2}) -> [aaa|bbb];
-%  ({value,rec,a}) -> 1;
-%  ({value,rec,b}) -> 2;
-%  ({value,rec2,aaa}) -> undefined;
-%  ({value,rec2,bbb}) -> 1234.
+-export_record_info([rec]).
+-export_record_info([rec2]).
 
 -record(rec, {
   a = 1 :: integer(),
   b = 2 :: integer()
+}).
+
+-record(rec_private, {
+  a = 1 :: integer()
 }).
 
 -spec main() -> ok.
@@ -31,7 +28,7 @@ main() ->
 
 -spec test() -> ok.
 test() -> 
-  plan(9),
+  plan(12),
 
   R1 = #rec{a = 3, b = 4},
   disp(1, R1, {rec, 3, 4}),
@@ -64,12 +61,25 @@ test() ->
   R8 = proplist_to_record([], rec2, ?MODULE),
   disp(8, R8, {rec2,undefined,1234}),
 
-  R9 = (fun() -> try
-    proplist_to_record([], rec_not_defined, ?MODULE)
+  R9 = lists:sort(record_info:record_list(?MODULE)),
+  disp(9, R9, [rec, rec2]),
+
+  R10 = #rec_private { a = 10 },
+  disp(10, R10, #rec_private{ a = 10 }),
+
+  R11 = (fun() -> try
+    record_to_proplist(R10, ?MODULE)
   catch
     C:R -> {C,R}
   end end)(),
-  disp(9, R9, {error,function_clause}),
+  disp(11, R11, {error,function_clause}),
+
+  R12 = (fun() -> try
+    proplist_to_record([], rec_private, ?MODULE)
+  catch
+    C:R -> {C,R}
+  end end)(),
+  disp(12, R12, {error,function_clause}),
 
   ok.
 
