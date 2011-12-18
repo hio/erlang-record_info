@@ -7,22 +7,24 @@
 -module(record_info_transform).
 -export([parse_transform/2]).
 
+-type lineno() :: erl_scan:line().
+
 -type erl_form_atom() ::
        {
          Type   :: atom,
-         Lineno :: pos_integer(),
+         Lineno :: lineno(),
          Value  :: atom()
        }.
 -type erl_form_record_field_1() ::
         {
           Type      :: record_field,
-          Lineno    :: pos_integer(),
+          Lineno    :: lineno(),
           FieldName :: erl_form_atom()
         }.
 -type erl_form_record_field_2() ::
         {
           Type      :: record_field,
-          Lineno    :: pos_integer(),
+          Lineno    :: lineno(),
           FieldName :: erl_form_atom(),
           IniValue  :: erl_parse:abstract_form()
         }.
@@ -40,7 +42,7 @@
 -record(record_spec, {
   name   :: erl_form_atom(),
   fields :: [erl_form_record_field()],
-  lineno :: pos_integer()
+  lineno :: lineno()
 }).
 
 -spec parse_transform(
