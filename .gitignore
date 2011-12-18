@@ -10,3 +10,4 @@
 *.S
 erl_crash.dump
 _build
+log.txt
