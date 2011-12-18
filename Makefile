@@ -9,9 +9,9 @@ all:
 	mkdir -p _build/examples/ebin
 	mkdir -p _build/t/ebin
 	cp -f src/record_info.hrl _build/record_info/include
-	cd src      && $(ERL) -make
-	cd t        && $(ERL) -pz ../_build/record_info/ebin -make
-	cd examples && $(ERL) -pz ../_build/record_info/ebin -make
+	$(MAKE) -C src
+	$(MAKE) -C t
+	$(MAKE) -C examples
 	$(ERL) -pz _build/record_info/ebin -pz _build/examples/ebin -noinput -run example main
 	$(ERL) -pz _build/record_info/ebin -pz _build/t/ebin -noinput -run test main
 	rm -f _build/test.plt
