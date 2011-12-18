@@ -1,6 +1,7 @@
 {
   [
-    'example.erl'
+    'example.erl',
+    'example_2.erl'
   ],
   [
     verbose,

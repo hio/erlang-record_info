@@ -8,6 +8,10 @@
 -export([parse_transform/2]).
 -export([format_error/1]).
 
+-export_type([erl_form_record_field/0]).
+
+-include("record_info_internal.hrl").
+
 -type lineno() :: erl_scan:line().
 
 -type erl_form_atom() ::
@@ -104,6 +108,14 @@ parse_1([{attribute, LineNo, export_record_info, NameList} | Rest], Result, Pars
   {Result_2, ParsedInfo_2} = parse_export_record_info(NameList, LineNo, Result, ParsedInfo),
   parse_1(Rest, Result_2, ParsedInfo_2, O);
 
+parse_1([{attribute, LineNo, import_record_info, {Module,RecName}} | Rest], Result, ParsedInfo, O) when is_atom(Module) andalso is_atom(RecName) ->
+  {Result_2, ParsedInfo_2} = parse_import_record_info([{Module, RecName}], LineNo, Result, ParsedInfo),
+  parse_1(Rest, Result_2, ParsedInfo_2, O);
+
+parse_1([{attribute, LineNo, import_record_info, NameList} | Rest], Result, ParsedInfo, O) when is_list(NameList) ->
+  {Result_2, ParsedInfo_2} = parse_import_record_info(NameList, LineNo, Result, ParsedInfo),
+  parse_1(Rest, Result_2, ParsedInfo_2, O);
+
 parse_1([{attribute, _LineNo, file, {FileName, _LineNo2}}=Head | Rest], Result, ParsedInfo, O) ->
   ParsedInfo_2 = ParsedInfo#parsed_info {
     file = FileName
@@ -194,6 +206,29 @@ read_export_record_info(NameList, LineNo, ParsedInfo) ->
     export_list = ExportList_2
   },
   {OkNg, ParsdInfo_2}.
+
+
+% ----------------------------------------------------------------------------
+% parse_import_record_info.
+%
+parse_import_record_info(NameList, LineNo, Result, ParsedInfo) ->
+  lists:foldl(fun(Elem, {ResultIn, ParsedInfoIn}) ->
+    parse_import_record_info_2(Elem, LineNo, ResultIn, ParsedInfoIn)
+  end, {Result, ParsedInfo}, NameList).
+
+parse_import_record_info_2({Module, RecordName}, LineNo, Result, ParsedInfo) when is_atom(Module) andalso is_atom(RecordName) ->
+  Decl = Module:record_info({decl, RecordName}),
+  Fields = Decl#record_decl.fields,
+  Attr = {attribute, LineNo, record, {RecordName, Fields}},
+  Result_2 = [Attr | Result],
+  {Result_2, ParsedInfo};
+parse_import_record_info_2(_ImportInfo, LineNo, Result, ParsedInfo) ->
+  File = ParsedInfo#parsed_info.file,
+  Msg = "bad import_record_info attribute",
+  ParsedInfo_2 = report_error(File, LineNo, Msg, ParsedInfo),
+  Error    = {error, {LineNo, ?MODULE, Msg}},
+  Result_2 = [Error | Result],
+  {Result_2, ParsedInfo_2}.
 
 
 % ----------------------------------------------------------------------------
@@ -310,7 +345,20 @@ make_init_fun(Records, InitLineNo) ->
       {SortKey, Clause2}
     end)(),
 
-    List_2 = [KeysPart | List_1],
+    % record_info({decl, RecordName}) の生成.
+    DeclPart = (fun() ->
+      RawBody = #record_decl {
+        fields = Fields
+      },
+      Body = form_encode(RawBody, LineNo),
+      % {decl, RecName}.
+      SortKey = {decl, raw_atom(RecordName)},
+      Clause  = {tuple, LineNo, [{atom, LineNo, decl}, RecordName]},
+      Clause2 = {clause, LineNo, [Clause], [], [Body]},
+      {SortKey, Clause2}
+    end)(),
+
+    List_2 = [KeysPart, DeclPart | List_1],
     List_2
   end, Clauses_0, Records),
 
@@ -335,6 +383,31 @@ make_init_fun(Records, InitLineNo) ->
   InitExport = {attribute, InitLineNo, export, [{FunName,Arity}]},
 
   {InitFun, InitExport}.
+
+form_encode(Form, LineNo) when is_list(Form) ->
+  case is_string(Form) of
+    true ->
+      {string, LineNo, Form};
+    false ->
+      lists:foldl(fun(Elem, AccIn) ->
+        Encoded = form_encode(Elem, LineNo),
+        {cons, LineNo, Encoded, AccIn}
+      end, {nil, LineNo}, lists:reverse(Form))
+  end;
+
+form_encode(Form, LineNo) when is_tuple(Form) ->
+  List_1 = tuple_to_list(Form),
+  List_2 = lists:map(fun(E) -> form_encode(E, LineNo) end, List_1),
+  {tuple, LineNo, List_2};
+
+form_encode(Form, LineNo) when is_atom(Form) ->
+  {atom, LineNo, Form};
+
+form_encode(Form, LineNo) when is_integer(Form) ->
+  {integer, LineNo, Form}.
+
+is_string(Text) ->
+  lists:all(fun(E) -> is_integer(E) andalso E >= 0 andalso E < 128 end, Text).
 
 make_spec(Records, InitLineNo) ->
   RecordListType = {type,InitLineNo,list,[{type,11,union,[ {atom,InitLineNo,RecName} || {RecName,_MySpec} <- Records]}]},
@@ -366,7 +439,17 @@ make_spec(Records, InitLineNo) ->
           [{atom,InitLineNo,value},{type,InitLineNo,atom,[]},{type,InitLineNo,atom,[]}]}]},
        {type,InitLineNo,any,[]}]}
   ],
-  SpecList = [SpecForList] ++ SpecsForKeys ++ SpecsForValue,
+
+  % ({decl,RecName}) -> any().
+  SpecsForDecl = [
+     {type,InitLineNo,'fun',
+      [{type,InitLineNo,product,
+        [{type,InitLineNo,tuple,
+          [{atom,InitLineNo,decl},{type,InitLineNo,atom,[]}]}]},
+       {type,InitLineNo,any,[]}]}
+  ],
+
+  SpecList = [SpecForList] ++ SpecsForKeys ++ SpecsForValue ++ SpecsForDecl,
   InitSpec = {attribute,InitLineNo,spec, {{record_info,1}, SpecList}},
 
   InitSpec.

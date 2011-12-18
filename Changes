@@ -1,4 +1,8 @@
 
+0.3 2011-12-18
+
+- added -import_record_info() directive.
+
 0.2 2011-12-18
 
 (incompatible)

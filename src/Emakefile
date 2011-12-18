@@ -1,6 +1,7 @@
 {
   [
     'record_info.erl',
+    'record_info_compiler_supplement.erl',
     'record_info_transform.erl'
   ],
   [

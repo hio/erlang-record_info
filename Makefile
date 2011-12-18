@@ -13,6 +13,7 @@ all:
 	$(MAKE) -C t
 	$(MAKE) -C examples
 	$(ERL) -pz _build/record_info/ebin -pz _build/examples/ebin -noinput -run example main
+	$(ERL) -pz _build/record_info/ebin -pz _build/examples/ebin -noinput -run example_2 main
 	$(ERL) -pz _build/record_info/ebin -pz _build/t/ebin -noinput -run test main
 	rm -f _build/test.plt
 	# $(DIALYZER) --build_plt --output_plt _build/test.plt -r _build/t/ebin
