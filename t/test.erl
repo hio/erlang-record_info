@@ -2,6 +2,7 @@
 % test.
 % ----------------------------------------------------------------------------
 -module(test).
+-export([main/0]).
 -export([test/0]).
 -include("test.hrl").
 -include("record_info.hrl").
@@ -21,6 +22,12 @@
   a = 1 :: integer(),
   b = 2 :: integer()
 }).
+
+-spec main() -> ok.
+main() ->
+  test(),
+  init:stop(),
+  ok.
 
 -spec test() -> ok.
 test() -> 

@@ -13,7 +13,7 @@ all:
 	cd t        && $(ERL) -pz ../_build/record_info/ebin -make
 	cd examples && $(ERL) -pz ../_build/record_info/ebin -make
 	$(ERL) -pz _build/record_info/ebin -pz _build/examples/ebin -noinput -run example main
-	$(ERL) -pz _build/record_info/ebin -pz _build/t/ebin -noinput -eval 'test:test(), init:stop()'
+	$(ERL) -pz _build/record_info/ebin -pz _build/t/ebin -noinput -run test main
 	rm -f _build/test.plt
 	# $(DIALYZER) --build_plt --output_plt _build/test.plt -r _build/t/ebin
 
