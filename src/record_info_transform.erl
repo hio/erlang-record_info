@@ -60,7 +60,7 @@
   msg :: string()
 }).
 -type error_descriptor() :: #error_descriptor{}.
--type err_info() :: {lineno(), module(), error_descriptor()}.
+-type err_info() :: {file:name(),[{lineno(), module(), error_descriptor()}]}.
 
 -record(parsed_info, {
   file        = "" :: file:name(),
